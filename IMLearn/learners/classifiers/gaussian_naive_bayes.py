@@ -1,6 +1,8 @@
 from typing import NoReturn
 from ...base import BaseEstimator
 import numpy as np
+from numpy.linalg import det, inv
+
 
 class GaussianNaiveBayes(BaseEstimator):
     """
@@ -39,7 +41,12 @@ class GaussianNaiveBayes(BaseEstimator):
         y : ndarray of shape (n_samples, )
             Responses of input data to fit to
         """
-        raise NotImplementedError()
+
+        self.classes_, count = np.unique(y, return_counts=True)
+        self.pi_ = count / y.shape[0]
+        self.mu_ = np.array([X[np.where(y == i)].mean(axis=0) for i in range(len(self.classes_))])
+        self.vars_ = np.array([X[np.where(y == i)].var(axis=0, ddof=1) for i in range(len(self.classes_))])
+        self.fitted_ = True
 
     def _predict(self, X: np.ndarray) -> np.ndarray:
         """
@@ -55,7 +62,7 @@ class GaussianNaiveBayes(BaseEstimator):
         responses : ndarray of shape (n_samples, )
             Predicted responses of given samples
         """
-        raise NotImplementedError()
+        return np.argmax(self.likelihood(X), axis=1)
 
     def likelihood(self, X: np.ndarray) -> np.ndarray:
         """
@@ -75,7 +82,13 @@ class GaussianNaiveBayes(BaseEstimator):
         if not self.fitted_:
             raise ValueError("Estimator must first be fitted before calling `likelihood` function")
 
-        raise NotImplementedError()
+        likelihood = []
+        for i in range(len(self.classes_)):
+            mu = X - self.mu_[i]
+            cov = np.eye(X.shape[1]) * self.vars_[i]
+            pdf = np.exp(np.diag(-0.5 * (mu @ np.linalg.inv(cov) @ mu.T))) / (np.sqrt(det(cov * 2 * np.pi)))
+            likelihood.append(pdf * self.pi_[i])
+        return np.array(likelihood).T
 
     def _loss(self, X: np.ndarray, y: np.ndarray) -> float:
         """
@@ -95,4 +108,5 @@ class GaussianNaiveBayes(BaseEstimator):
             Performance under missclassification loss function
         """
         from ...metrics import misclassification_error
-        raise NotImplementedError()
+        predict = self._predict(X)
+        return misclassification_error(y, predict)
